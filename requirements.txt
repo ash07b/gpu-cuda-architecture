@@ -1,0 +1,8 @@
+# Pre-installed on Google Colab. For local runs, install a CUDA-enabled PyTorch build
+# from https://pytorch.org and an NVIDIA CUDA toolkit (for nvcc) separately.
+torch>=2.1
+numpy
+pandas
+matplotlib
+# only needed to regenerate the notebook with tools/build_notebook.py
+nbformat

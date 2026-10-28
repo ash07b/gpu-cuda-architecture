@@ -1,0 +1,14 @@
+# compiled kernel libraries (rebuilt by the notebook)
+build/
+*.so
+*.o
+
+# Python / Jupyter
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+
+# OS / editor
+.DS_Store
+.vscode/
+.idea/
