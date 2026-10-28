@@ -1,0 +1,24 @@
+experiment,implementation,device,size,dtype,median_ms,metric,unit,correct,status,notes
+vector_add,PyTorch CPU,x86_64,N=16777216,float32,15.2826,13.17,GB/s,True,executed,data in host RAM
+vector_add,PyTorch GPU,Tesla T4,N=16777216,float32,0.8496,236.96,GB/s,True,executed,kernel only; inputs already on device
+host_to_device_copy,pageable memory,Tesla T4,N=16777216,float32,14.3327,4.68,GB/s,,executed,"PCIe transfer, 1 array"
+vector_add,custom CUDA,Tesla T4,N=16777216,float32,0.7872,255.76,GB/s,True,executed,threads_per_block=256
+memory_access,coalesced copy (custom),Tesla T4,N=16777216,float32,0.5835,230.04,GB/s,True,executed,
+memory_access,strided gather s=128 (custom),Tesla T4,N=16777216,float32,6.3275,21.21,GB/s,True,executed,slowest stride in sweep
+transpose,PyTorch .t().contiguous(),Tesla T4,4096x4096,float32,0.9589,139.98,GB/s,True,executed,
+transpose,naive (custom),Tesla T4,4096x4096,float32,2.4723,54.29,GB/s,True,executed,
+transpose,tiled (custom),Tesla T4,4096x4096,float32,0.7142,187.92,GB/s,True,executed,
+reduction_sum,PyTorch CPU,x86_64,N=16777216,float32,5.0572,13.27,GB/s,True,executed,
+reduction_sum,PyTorch GPU,Tesla T4,N=16777216,float32,0.2682,250.26,GB/s,True,executed,
+reduction_sum,tree (custom),Tesla T4,N=16777216,float32,0.2674,250.95,GB/s,True,executed,
+reduction_sum,atomicAdd (custom),Tesla T4,N=16777216,float32,33.3959,2.01,GB/s,True,executed,
+matmul,PyTorch CPU,x86_64,1024^3,float32,17.2198,124.71,GFLOP/s,True,executed,
+matmul,"PyTorch GPU (cuBLAS, FP32)",Tesla T4,1024^3,float32,0.3561,6030.36,GFLOP/s,True,executed,TF32 disabled
+matmul,naive (custom),Tesla T4,1024^3,float32,4.9469,434.1,GFLOP/s,True,executed,
+matmul,tiled (custom),Tesla T4,1024^3,float32,2.782,771.92,GFLOP/s,True,executed,
+fusion relu(a*x+b),PyTorch unfused (3 kernels),Tesla T4,N=16777216,float32,1.717,78.17,GB/s,True,executed,metric uses minimum traffic 8N bytes; actual traffic 24N bytes
+fusion relu(a*x+b),custom unfused (2 kernels),Tesla T4,N=16777216,float32,1.1566,116.05,GB/s,True,executed,metric uses minimum traffic 8N bytes; actual traffic 16N bytes
+fusion relu(a*x+b),custom fused (1 kernel),Tesla T4,N=16777216,float32,0.5906,227.27,GB/s,True,executed,metric uses minimum traffic 8N bytes; actual traffic 8N bytes
+vector_add,PyTorch GPU incl. H2D+D2H,Tesla T4,N=16777216,float32,75.0695,2.68,GB/s,True,executed,end-to-end: transfers dominate
+MLP training (64→512→512→10),PyTorch CPU,x86_64,"65,536 samples, bs=1024",float32,1183.2933,55384.41,samples/s,True,executed,'correct' = loss decreased
+MLP training (64→512→512→10),PyTorch GPU,Tesla T4,"65,536 samples, bs=1024",float32,113.5987,576908.25,samples/s,True,executed,'correct' = loss decreased

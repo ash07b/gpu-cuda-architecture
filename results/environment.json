@@ -1,0 +1,18 @@
+{
+  "Python": "3.13.16",
+  "OS": "Linux-6.6.159+-x86_64-with-glibc2.39",
+  "PyTorch": "2.11.0+cu130",
+  "PyTorch built with CUDA": "13.0",
+  "cuDNN": "92700",
+  "CUDA available": "True",
+  "GPU name": "Tesla T4",
+  "Compute capability": "7.5",
+  "Total memory (GiB)": "14.56",
+  "Streaming multiprocessors (SMs)": "40",
+  "Warp size": "32",
+  "Max threads per SM": "1024",
+  "Registers per SM": "65536",
+  "L2 cache (MiB)": "4.0",
+  "Driver, max SM MHz, max mem MHz, power limit": "580.82.07, 1590 MHz, 5001 MHz, 70.00 W",
+  "nvcc": "Build cuda_13.0.r13.0/compiler.36424714_0"
+}

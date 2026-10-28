@@ -1,6 +1,6 @@
 # CUDA Lab: From GPU Architecture to Kernel Optimization
 
-[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/ash07b/cuda-gpu-architecture-lab/blob/main/CUDA_GPU_Architecture_Project.ipynb)
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/ash07b/gpu-cuda-architecture/blob/main/CUDA_GPU_Architecture_Project.ipynb)
 
 An end-to-end, runnable GPU computing lab in a single Google Colab notebook. It ties each GPU architecture concept to **CUDA C++ kernels I wrote**, a **correctness test**, and a **measurement taken on whatever GPU the runtime provides**.
 
@@ -9,7 +9,7 @@ hardware discovery → execution model → custom CUDA kernels → memory behavi
   → parallel algorithms → benchmarking → optimization (tiling, fusion) → small ML workload
 ```
 
-The notebook doesn't hard-code a GPU model or a benchmark number. It queries every device fact at runtime and generates every result from the current session.
+The notebook doesn't hard-code a GPU model or a benchmark number. It queries every device fact at runtime and generates every result from the current session. The committed copy keeps its outputs from a [Tesla T4 run](#results-tesla-t4-on-google-colab).
 
 ---
 
@@ -69,7 +69,7 @@ jupyter notebook CUDA_GPU_Architecture_Project.ipynb
 ## Repository layout
 
 ```
-cuda-gpu-architecture-lab/
+gpu-cuda-architecture/
 ├── CUDA_GPU_Architecture_Project.ipynb   # the lab (Parts A–L)
 ├── kernels/
 │   ├── common.cuh                        # export macro + error-string helper
@@ -79,30 +79,57 @@ cuda-gpu-architecture-lab/
 │   ├── reduction.cu                      # Part G: atomic vs tree reduction
 │   ├── tiled_matmul.cu                   # Part H: naive vs shared-memory tiled GEMM
 │   └── fused_elementwise.cu              # Part I: unfused vs fused relu(a*x+b)
-├── results/                              # written by the notebook at runtime
+├── results/                              # CSV, plots and environment from the T4 run (rewritten on each run)
+├── docs/screenshots/                     # notebook output screenshots used in this README
 ├── tools/
 │   └── build_notebook.py                 # regenerates the notebook from kernels/ + cell sources
 ├── requirements.txt
 └── README.md
 ```
 
-`kernels/*.cu` is the single source of truth for the CUDA code. The notebook embeds the same files as `%%writefile` cells so that it works when opened directly in Colab. After editing a kernel, regenerate the notebook so the two copies stay identical:
+`kernels/*.cu` is the single source of truth for the CUDA code. The notebook embeds the same files as `%%writefile` cells so that it works when opened directly in Colab. After editing a kernel, regenerate the notebook so the two copies stay identical. Regenerating produces a clean notebook without outputs:
 
 ```bash
 pip install nbformat
 python tools/build_notebook.py
 ```
 
-## Results
+## Results: Tesla T4 on Google Colab
 
-This repository deliberately contains **no pre-filled benchmark numbers**. Running the notebook writes:
+All numbers below come from one full run of the committed notebook. Its outputs are saved in the notebook, so you can read them on GitHub without running anything. The run used a **Tesla T4** (compute capability 7.5, 40 SMs, 4 MiB L2), PyTorch 2.11 with CUDA 13.0, and `nvcc` 13.0. All kernels were built with `-arch=sm_75`. **Every correctness check passed**, covering 23 measured implementations plus the edge-case sizes.
 
-* `results/environment.json`: GPU name, compute capability, SM count, memory, driver/PyTorch/CUDA/`nvcc` versions
-* `results/benchmark_results.csv`: one row per experiment with latency, GB/s or GFLOP/s, dtype, size, correctness status and execution status
-* `results/benchmark_plot.png`: effective bandwidth and matmul throughput, side by side
-* `results/stride_sweep.png`: bandwidth versus read stride
+| Experiment | Result on T4 | Takeaway |
+|---|---|---|
+| Vector add (16.8 M floats) | custom kernel **255.8 GB/s**, PyTorch 237.0 GB/s, CPU 13.2 GB/s | A simple bandwidth-bound kernel reaches ~80% of the T4's 320 GB/s datasheet peak. 32-thread blocks drop to 117.9 GB/s. |
+| PCIe vs kernel | H2D copy 4.7 GB/s; end-to-end add 75.1 ms vs 0.85 ms kernel-only | The kernel is **1.1%** of end-to-end time, so transfers dominate cheap ops. |
+| Coalesced vs strided reads | **230.0 GB/s** coalesced → **21.2 GB/s** at stride 128 | The same bytes with a different access pattern give a **10.8×** slowdown. |
+| Transpose 4096×4096 | tiled **187.9 GB/s**, naive 54.3 GB/s, PyTorch 140.0 GB/s | Shared-memory tiling with bank-conflict padding gives a **3.5×** speedup. |
+| Sum reduction (16.8 M floats) | tree **0.267 ms (250.9 GB/s)**, `torch.sum` 0.268 ms, atomics 33.4 ms | The tree matches PyTorch and is **125×** faster than atomics. Its relative error is 3.5e-8, vs 1.6e-5 for atomics. |
+| Matmul 1024³ FP32 | cuBLAS **6,030 GFLOP/s**, tiled 772, naive 434, CPU 125 | Tiling gives a 1.8× speedup. cuBLAS is still 7.8× ahead (register tiling, vector loads, pipelining). |
+| Fusion `relu(α·x+β)` | 3 kernels 1.717 ms → 2 kernels 1.157 ms → **1 kernel 0.591 ms** | A **2.9×** speedup. All three versions run at ~230 GB/s of real traffic, matching the 3 : 2 : 1 memory-traffic model. |
+| MLP training (65 k samples) | GPU **113.6 ms/epoch** vs CPU 1,183 ms/epoch | **10.4×** faster, with matching loss curves (1.440 → 1.105). |
 
-To publish your own run, commit those files and add a short summary here (GPU model, best streaming bandwidth versus datasheet peak, tiled versus naive matmul, fused versus unfused speedup).
+<p align="center">
+  <img src="results/benchmark_plot.png" width="720" alt="Effective bandwidth and matmul throughput on Tesla T4">
+</p>
+
+<p align="center">
+  <img src="results/stride_sweep.png" width="480" alt="Bandwidth vs read stride">
+  <img src="results/mlp_training_loss.png" width="440" alt="MLP training loss on CPU and GPU">
+</p>
+
+### Output screenshots
+
+| | |
+|---|---|
+| **GPU discovery** (Part A)<br><img src="docs/screenshots/01_system_info.png" width="420"> | **Custom vector-add edge cases** (Part D)<br><img src="docs/screenshots/03_vector_add_edge_cases.png" width="420"> |
+| **Block-size sweep** (Part D)<br><img src="docs/screenshots/04_vector_add_benchmark.png" width="420"> | **Launch geometry from a real kernel** (Part E)<br><img src="docs/screenshots/05_launch_geometry.png" width="420"> |
+| **Coalesced vs strided** (Part F)<br><img src="docs/screenshots/06_memory_access.png" width="420"> | **Naive vs tiled transpose** (Part F)<br><img src="docs/screenshots/07_transpose.png" width="420"> |
+| **Reduction: accuracy and speed** (Part G)<br><img src="docs/screenshots/08_reduction.png" width="420"> | **Matmul correctness** (Part H)<br><img src="docs/screenshots/09_matmul_correctness.png" width="420"> |
+| **Matmul throughput** (Part H)<br><img src="docs/screenshots/10_matmul_benchmark.png" width="420"> | **Kernel fusion** (Part I)<br><img src="docs/screenshots/11_kernel_fusion.png" width="420"> |
+| **`torch.profiler` kernel trace** (Part J)<br><img src="docs/screenshots/13_torch_profiler.png" width="420"> | **Automatic interpretation** (Part L)<br><img src="docs/screenshots/15_interpretation.png" width="420"> |
+
+The full results table is in [`results/benchmark_results.csv`](results/benchmark_results.csv), with a [screenshot](docs/screenshots/14_results_table.png). The environment record is in [`results/environment.json`](results/environment.json). Re-running the notebook on another GPU regenerates every file in `results/`.
 
 ## Methodology at a glance
 
